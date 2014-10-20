@@ -1,0 +1,80 @@
+/*
+ * # Write the following settings to ~/.gradle/gradle.properties
+ *
+ * REPO_DEPLOYMENT_USERNAME=deployment
+ * REPO_DEPLOYMENT_PASSWORD=deployment123
+ * REPO_DEPLOYMENT_URL=http://dns-of-server:8081/nexus/content/repositories
+ *
+ */
+
+/*
+ * The gradle wrapper generation.
+ */
+task wrapper(type:Wrapper) {
+  gradleVersion = '1.10'
+}
+
+//apply from: 'package.gradle'
+
+repositories {
+    mavenCentral()
+    maven {
+        url "${REPO_DEPLOYMENT_URL}/releases"
+        credentials {
+            username REPO_DEPLOYMENT_USERNAME
+            password REPO_DEPLOYMENT_PASSWORD
+        }
+    }
+} 
+
+def packagesVersion = project.hasProperty("packagesVersion") ? project.getProperty("packagesVersion"): "1.0.0.+"
+def target = project.hasProperty("targetDirectory") ? project.getProperty("targetDirectory"): "output-pool"
+
+configurations {
+    arts
+}
+
+dependencies {
+    arts 'com.geeoz.atom:atom-web:1.0d28@war'
+    arts 'org.eobjects.datacleaner:DataCleaner-monitor-ui:3.7@war'
+}
+
+task fetch() {}
+task clean() {}
+task copy() {}
+
+task fetchArtifact << {
+    description = "Download some artifacts from nexus server"
+    File outputDir = file("pool")
+
+    Set<ResolvedArtifact> artifacts = configurations.arts.resolvedConfiguration.resolvedArtifacts
+    for (ResolvedArtifact artifact : artifacts) {
+        println (artifact)
+        copy {
+            from artifact.file
+            into "${outputDir}"
+            rename { fileName ->
+                "${artifact.name}.${artifact.extension}"
+            }
+        }
+    }
+}
+
+task cleanArtifact(type: Delete) {
+    description = "Clean the artifacts downloaded from nexus server"
+    delete fileTree("pool").include('*')
+}
+
+task copyArtifact(type: Copy) {
+    description = "Copy the artifacts to the deployment directory"
+    File fromDir = file("pool")
+    File toDir = file(target)
+
+    from "${fromDir}"
+    into "${toDir}"
+    include '*.war'
+}
+
+fetch.dependsOn fetchArtifact
+clean.dependsOn cleanArtifact
+copy.dependsOn copyArtifact
